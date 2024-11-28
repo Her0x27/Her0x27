@@ -3,10 +3,14 @@ name: Socks5 LocalTunnel
 on:
   workflow_dispatch:
     inputs:
-      auth:
-        description: 'Socks5 auth (username:password)'
+      username:
+        description: 'Socks5 username'
         required: true
-        default: 'user:pass'
+        default: 'user'
+      password:
+        description: 'Socks5 password'
+        required: true
+        default: 'pass'
       subdomain:
         description: 'LocalTunnel subdomain (optional)'
         required: false
@@ -36,8 +40,7 @@ jobs:
 
       - name: Start Socks5 and LocalTunnel
         run: |
-          IFS=':' read -r username password <<< "${{ github.event.inputs.auth }}"
-          ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
+          ./microsocks/microsocks -u "${{ github.event.inputs.username }}" -p "${{ github.event.inputs.password }}" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
           
           if [ -n "${{ github.event.inputs.subdomain }}" ]; then
             lt --port 1080 --subdomain ${{ github.event.inputs.subdomain }} >> working.log 2>&1 &
