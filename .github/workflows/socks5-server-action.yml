@@ -1,0 +1,56 @@
+name: Socks5 Tunnel
+
+on:
+  workflow_dispatch:
+    inputs:
+      auth:
+        description: 'Socks5 auth (username:password)'
+        required: true
+        default: 'user:pass'
+
+jobs:
+  tunnel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache ngrok
+        uses: actions/cache@v3
+        with:
+          path: ngrok
+          key: ${{ runner.os }}-ngrok
+
+      - name: Cache microsocks
+        uses: actions/cache@v3
+        with:
+          path: microsocks
+          key: ${{ runner.os }}-microsocks
+
+      - name: Install ngrok
+        if: steps.cache-ngrok.outputs.cache-hit != 'true'
+        run: |
+          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+          tar xvzf ngrok-v3-stable-linux-amd64.tgz
+          chmod +x ngrok
+
+      - name: Install microsocks
+        if: steps.cache-microsocks.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git gcc make
+          git clone https://github.com/rofl0r/microsocks.git
+          cd microsocks
+          make
+
+      - name: Configure ngrok
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+        run: |
+          ./ngrok authtoken $NGROK_AUTH_TOKEN
+
+      - name: Start Socks5 and ngrok
+        run: |
+          IFS=':' read -r username password <<< "${{ github.event.inputs.auth }}"
+          ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
+          ./ngrok tcp 1080 --log=stdout > working.log 2>&1 &
+          sleep 5
+          curl http://localhost:4040/api/tunnels | tee -a working.log
+          tail -f working.log
