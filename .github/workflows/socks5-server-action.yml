@@ -1,19 +1,12 @@
-name: Socks5 LocalTunnel
+name: Socks5 Pinggy Tunnel
 
 on:
   workflow_dispatch:
     inputs:
-      username:
-        description: 'Socks5 username'
+      auth:
+        description: 'Socks5 auth (username:password)'
         required: true
-        default: 'user'
-      password:
-        description: 'Socks5 password'
-        required: true
-        default: 'pass'
-      subdomain:
-        description: 'LocalTunnel subdomain (optional)'
-        required: false
+        default: 'user:pass'
 
 jobs:
   tunnel:
@@ -25,10 +18,6 @@ jobs:
           path: microsocks
           key: ${{ runner.os }}-microsocks
 
-      - name: Install LocalTunnel
-        run: |
-          npm install -g localtunnel
-
       - name: Install microsocks
         if: steps.cache-microsocks.outputs.cache-hit != 'true'
         run: |
@@ -38,15 +27,16 @@ jobs:
           cd microsocks
           make
 
-      - name: Start Socks5 and LocalTunnel
+      - name: Install pinggy
         run: |
-          ./microsocks/microsocks -u "${{ github.event.inputs.username }}" -p "${{ github.event.inputs.password }}" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
-          
-          if [ -n "${{ github.event.inputs.subdomain }}" ]; then
-            lt --port 1080 --subdomain ${{ github.event.inputs.subdomain }} >> working.log 2>&1 &
-          else
-            lt --port 1080 >> working.log 2>&1 &
-          fi
-          
+          curl -s https://www.pinggy.io/pinggy.sh | bash
+
+      - name: Start Socks5 and pinggy
+        env:
+          PINGGY_TOKEN: ${{ secrets.PINGGY_TOKEN }}
+        run: |
+          IFS=':' read -r username password <<< "${{ github.event.inputs.auth }}"
+          ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
+          pinggy tcp 1080 --auth $PINGGY_TOKEN | tee -a working.log &
           sleep 5
           tail -f working.log
