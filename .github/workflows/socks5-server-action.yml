@@ -27,16 +27,13 @@ jobs:
           cd microsocks
           make
 
-      - name: Install pinggy
-        run: |
-          curl -s https://www.pinggy.io/pinggy.sh | bash
-
-      - name: Start Socks5 and pinggy
+      - name: Start Socks5 and Pinggy tunnel
         env:
           PINGGY_TOKEN: ${{ secrets.PINGGY_TOKEN }}
         run: |
           IFS=':' read -r username password <<< "${{ github.event.inputs.auth }}"
-          ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
-          pinggy tcp 1080 --auth $PINGGY_TOKEN | tee -a working.log &
-          sleep 5
-          tail -f working.log
+          ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 3000 > working.log 2>&1 &
+          while true; do 
+            ssh -p 443 -R0:localhost:3000 -L4300:localhost:4300 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 $PINGGY_TOKEN@a.pinggy.io | tee -a working.log
+            sleep 10
+          done
