@@ -1,4 +1,4 @@
-name: Socks5 Tunnel
+name: Socks5 LocalTunnel
 
 on:
   workflow_dispatch:
@@ -7,29 +7,23 @@ on:
         description: 'Socks5 auth (username:password)'
         required: true
         default: 'user:pass'
+      subdomain:
+        description: 'LocalTunnel subdomain (optional)'
+        required: false
 
 jobs:
   tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Cache ngrok
-        uses: actions/cache@v3
-        with:
-          path: ngrok
-          key: ${{ runner.os }}-ngrok
-
       - name: Cache microsocks
         uses: actions/cache@v3
         with:
           path: microsocks
           key: ${{ runner.os }}-microsocks
 
-      - name: Install ngrok
-        if: steps.cache-ngrok.outputs.cache-hit != 'true'
+      - name: Install LocalTunnel
         run: |
-          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
-          tar xvzf ngrok-v3-stable-linux-amd64.tgz
-          chmod +x ngrok
+          npm install -g localtunnel
 
       - name: Install microsocks
         if: steps.cache-microsocks.outputs.cache-hit != 'true'
@@ -40,17 +34,16 @@ jobs:
           cd microsocks
           make
 
-      - name: Configure ngrok
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        run: |
-          ./ngrok authtoken $NGROK_AUTH_TOKEN
-
-      - name: Start Socks5 and ngrok
+      - name: Start Socks5 and LocalTunnel
         run: |
           IFS=':' read -r username password <<< "${{ github.event.inputs.auth }}"
           ./microsocks/microsocks -u "$username" -p "$password" -i 127.0.0.1 -p 1080 > working.log 2>&1 &
-          ./ngrok tcp 1080 --log=stdout > working.log 2>&1 &
+          
+          if [ -n "${{ github.event.inputs.subdomain }}" ]; then
+            lt --port 1080 --subdomain ${{ github.event.inputs.subdomain }} >> working.log 2>&1 &
+          else
+            lt --port 1080 >> working.log 2>&1 &
+          fi
+          
           sleep 5
-          curl http://localhost:4040/api/tunnels | tee -a working.log
           tail -f working.log
